@@ -36,7 +36,6 @@ include = ["cs336_alignment*"]
 [tool.uv]
 package = true
 environments = [
-    "platform_machine == 'arm64' and sys_platform == 'darwin'",
     "platform_machine == 'x86_64' and sys_platform == 'linux'",
     "platform_machine == 'AMD64' and sys_platform == 'win32'"
 ]

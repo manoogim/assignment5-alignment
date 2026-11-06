@@ -105,7 +105,7 @@ def main():
     ap.add_argument("--prompt", choices=PROMPTS, default="r1_zero_three_shot", help="which prompt to evaluate")
     ap.add_argument("--backend", choices=["vllm", "hf"], default="hf", help="vllm is faster but requires a GPU; hf works on CPU")
     ap.add_argument("--data", default="data/gsm8k/test.jsonl")
-    ap.add_argument("--limit", type=int, default=20, help="evaluate a random subset")
+    ap.add_argument("--limit", type=int, default=None, help="evaluate a random subset")
     ap.add_argument("--batch-size", type=int, default=4)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--out-dir", default="eval_outputs")

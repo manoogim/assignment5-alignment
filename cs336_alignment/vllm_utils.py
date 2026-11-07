@@ -136,7 +136,7 @@ def start_server(
         "--port",
         str(port),
         "--dtype",
-        "half",
+        "bfloat16",
         "--enable-prefix-caching",
         "--gpu-memory-utilization",
         str(gpu_memory_utilization),

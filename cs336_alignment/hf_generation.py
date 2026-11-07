@@ -17,13 +17,15 @@ from cs336_alignment.vllm_utils import VLLMCompletion  # safe to import without 
 
 
 class HFGenerator:
-    def __init__(self, model_id, model, tokenizer=None, device: str | None = None):
+    def __init__(self, model_id: str | None = None, model=None, tokenizer=None, device: str | None = None):
         """Either pass model_id to load, or pass an already-loaded model + tokenizer
         (e.g. the policy you're training, for a CPU smoke test)."""
         if model is None:
             device = device or ("cuda" if torch.cuda.is_available() else "cpu")
             dtype = torch.float16 if device == "cuda" else torch.float32  # T4: no bf16; CPU: fp32 faster
-            model = AutoModelForCausalLM.from_pretrained( model_id, torch_dtype=dtype, attn_implementation="sdpa").to(device)
+            model = AutoModelForCausalLM.from_pretrained(
+                model_id, torch_dtype=dtype, attn_implementation="sdpa"
+            ).to(device)
             tokenizer = AutoTokenizer.from_pretrained(model_id)
         self.model = model
         self.tokenizer = tokenizer
@@ -32,7 +34,12 @@ class HFGenerator:
             self.tokenizer.pad_token = self.tokenizer.eos_token
 
     @torch.inference_mode()
-    def generate_completions( self,  prompts: list[str],   sampling_params: dict, batch_size: int | None = None,  ) -> list[VLLMCompletion]:
+    def generate_completions(
+        self,
+        prompts: list[str],
+        sampling_params: dict,
+        batch_size: int | None = None,
+    ) -> list[VLLMCompletion]:
         n = sampling_params.get("n", 1)
         max_tokens = sampling_params["max_tokens"]
         stop = sampling_params.get("stop")
@@ -47,10 +54,15 @@ class HFGenerator:
         self.model.eval()
         self.tokenizer.padding_side = "left"  # required for batched decoder-only generation
 
-        completions = []
+        # Longest prompts first: batches pad to their longest prompt, so grouping similar lengths
+        # cuts padding/KV memory, and the worst-case batch runs first so an OOM shows up immediately
+        # instead of hours in.
+        order = sorted(range(len(prompts)), key=lambda j: len(prompts[j]), reverse=True)
+        per_prompt = [None] * len(prompts)  # original index -> list of n completions
         try:
-            for i in range(0, len(prompts), batch_size):
-                batch = prompts[i : i + batch_size]
+            for i in range(0, len(order), batch_size):
+                idxs = order[i : i + batch_size]
+                batch = [prompts[j] for j in idxs]
                 enc = self.tokenizer(batch, return_tensors="pt", padding=True).to(self.device)
                 kwargs = dict(
                     do_sample=True,
@@ -66,6 +78,7 @@ class HFGenerator:
                 out = self.model.generate(**enc, **kwargs)
                 new_tokens = out[:, enc["input_ids"].shape[1] :].tolist()
 
+                batch_completions = []
                 for ids in new_tokens:
                     while ids and ids[-1] == pad_id:  # strip right padding (and the EOS if pad == EOS)
                         ids.pop()
@@ -78,10 +91,15 @@ class HFGenerator:
                         if hits:
                             start, s = min(hits)  # earliest stop string wins
                             text = text[: start + (len(s) if include_stop else 0)]
-                    completions.append(VLLMCompletion(text=text, token_ids=ids, finish_reason=finish))
+                    batch_completions.append(VLLMCompletion(text=text, token_ids=ids, finish_reason=finish))
+                for k, j in enumerate(idxs):  # HF returns n consecutive rows per prompt
+                    per_prompt[j] = batch_completions[k * n : (k + 1) * n]
+                del out, enc
+                if self.device.startswith("cuda"):
+                    torch.cuda.empty_cache()  # release the KV cache so fragmentation doesn't accumulate
                 print(f"  generated {min(i + batch_size, len(prompts))}/{len(prompts)} prompts", flush=True)
         finally:
             self.tokenizer.padding_side = old_side
             if was_training:
                 self.model.train()
-        return completions
+        return [c for group in per_prompt for c in group]  # original prompt order, prompt-major

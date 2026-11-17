@@ -1,0 +1,10 @@
+{
+  "prompt": "question_only",
+  "n_examples": 20,
+  "counts": {
+    "cat3_format0_answer0": 14,
+    "cat2_format1_answer0": 6
+  },
+  "accuracy": 0.0,
+  "format_rate": 0.3
+}

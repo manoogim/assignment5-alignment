@@ -8,6 +8,10 @@ from torch import Tensor
 from torch.utils.data import Dataset
 from transformers import PreTrainedTokenizerBase
 
+from cs336_alignment.grpo import grpo_train_step
+from cs336_alignment.losses import aggregate_loss_across_microbatch
+from cs336_alignment.policy import compute_policy_gradient_loss, get_response_log_probs, tokenize_prompt_and_output
+from cs336_alignment.rewards import compute_group_normalized_rewards, compute_rollout_rewards
 
 
 def run_tokenize_prompt_and_output(
@@ -46,7 +50,8 @@ def run_tokenize_prompt_and_output(
                 with labels, with value 1 where the corresponding label token
                 is part of the response and 0 otherwise.
     """
-    raise NotImplementedError
+    ans = tokenize_prompt_and_output(prompt_strs, output_strs, tokenizer)
+    return ans
 
 
 def run_get_response_log_probs(
@@ -82,8 +87,8 @@ def run_get_response_log_probs(
                 entropy for each position (present only if
                 return_token_entropy=True).
     """
-    raise NotImplementedError
-
+    result =get_response_log_probs(model, input_ids, labels, return_token_entropy)
+    return result
 
 def run_compute_rollout_rewards(
     reward_fn: Callable[[str, str], dict[str, float]],
@@ -114,8 +119,8 @@ def run_compute_rollout_rewards(
                 Reward statistics to log. At minimum, include the mean total
                 and format rewards over the rollout batch.
     """
-    raise NotImplementedError
-
+    ans = compute_rollout_rewards(reward_fn, rollout_responses, repeated_ground_truths)
+    return ans
 
 def run_compute_group_normalized_rewards(
     raw_rewards: torch.Tensor,
@@ -153,14 +158,15 @@ def run_compute_group_normalized_rewards(
                 your choice of other statistics to log (e.g. mean, std, max/min
                 of rewards).
     """
-    raise NotImplementedError
+    ans = compute_group_normalized_rewards(raw_rewards, group_size, baseline, advantage_eps, advantage_normalizer)
+    return ans
 
 
 def run_compute_policy_gradient_loss(
     raw_rewards_or_advantages: torch.Tensor,
     policy_log_probs: torch.Tensor,
     importance_reweighting_method: Literal["none", "noclip", "grpo", "gspo"] = "none",
-    old_log_probs: torch.Tensor | None = None,
+    old_log_probs : torch.Tensor | None = None,
     cliprange: float | None = None,
     response_mask: torch.Tensor | None = None,
 ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
@@ -200,7 +206,7 @@ def run_compute_policy_gradient_loss(
                 Statistics from the underlying loss call, such as
                 clip-fraction components.
     """
-    raise NotImplementedError
+    return compute_policy_gradient_loss(raw_rewards_or_advantages, policy_log_probs, 'none')
 
 
 def run_aggregate_loss_across_microbatch(
@@ -232,7 +238,7 @@ def run_aggregate_loss_across_microbatch(
             A scalar containing the average loss. Make sure you can later call
             backward on this loss.
     """
-    raise NotImplementedError
+    return aggregate_loss_across_microbatch(per_token_policy_gradient_loss, mask, loss_normalization)
 
 
 def run_grpo_train_step(
@@ -321,7 +327,9 @@ def run_grpo_train_step(
                 Dict with metadata from the underlying loss call, gradient norm
                 before clipping, and any other statistics you might want to log.
     """
-    raise NotImplementedError
+    return grpo_train_step(model, tokenizer, optimizer, gradient_accumulation_steps, max_grad_norm, reward_fn, repeated_prompts, 
+                           rollout_responses, repeated_ground_truths, group_size, baseline, advantage_eps, advantage_normalizer, 
+                           importance_reweighting_method, old_log_probs, cliprange, loss_normalization, normalization_constant)
 
 
 """

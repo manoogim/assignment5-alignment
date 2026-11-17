@@ -1,0 +1,11 @@
+{
+  "prompt": "r1_zero_three_shot",
+  "n_examples": 1319,
+  "counts": {
+    "cat2_format1_answer0": 994,
+    "cat1_format1_answer1": 273,
+    "cat3_format0_answer0": 52
+  },
+  "accuracy": 0.20697498104624715,
+  "format_rate": 0.9605761940864291
+}

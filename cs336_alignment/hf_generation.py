@@ -17,13 +17,15 @@ from cs336_alignment.vllm_utils import VLLMCompletion  # safe to import without 
 
 
 class HFGenerator:
-    def __init__(self, model_id, model=None, tokenizer=None, device: str | None = None):
+    def __init__(self, model_id: str | None = None, model=None, tokenizer = None, device: str | None = None):
         """Either pass model_id to load, or pass an already-loaded model + tokenizer
         (e.g. the policy you're training, for a CPU smoke test)."""
         if model is None:
             device = device or ("cuda" if torch.cuda.is_available() else "cpu")
             dtype = torch.float16 if device == "cuda" else torch.float32  # T4: no bf16; CPU: fp32 faster
-            model = AutoModelForCausalLM.from_pretrained(model_id, torch_dtype=dtype, attn_implementation="sdpa").to(device)
+            model = AutoModelForCausalLM.from_pretrained(
+                model_id, torch_dtype=dtype, attn_implementation="sdpa"
+            ).to(device)
             tokenizer = AutoTokenizer.from_pretrained(model_id)
         self.model = model
         self.tokenizer = tokenizer
@@ -31,8 +33,28 @@ class HFGenerator:
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
 
+    # --- VLLMServer-compatible lifecycle/sync methods, so training scripts can swap backends ---
+    def start(self) -> None:
+        pass
+
+    def stop(self) -> None:
+        pass
+
+    def init_weight_sync(self, policy_device: str) -> None:
+        pass
+
+    def sync_policy_weights(self, policy: torch.nn.Module) -> None:
+        # With HFGenerator(model=policy, ...) the weights are shared, so there is nothing to sync.
+        if policy is not self.model:
+            self.model.load_state_dict(policy.state_dict())
+
     @torch.inference_mode()
-    def generate_completions( self, prompts: list[str], sampling_params: dict, batch_size: int | None = None, ) -> list[VLLMCompletion]:
+    def generate_completions(
+        self,
+        prompts: list[str],
+        sampling_params: dict,
+        batch_size: int | None = None,
+    ) -> list[VLLMCompletion]:
         n = sampling_params.get("n", 1)
         max_tokens = sampling_params["max_tokens"]
         stop = sampling_params.get("stop")

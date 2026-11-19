@@ -146,7 +146,7 @@ def grpo_train_step(
     optimizer.zero_grad()
 
     metadata  = {**rr_metadata, **gn_metadata}
-    metadata['grad_norm'] = grad_norm # type: ignore
+    metadata['grad_norm'] = grad_norm.item()
     metadata['loss'] = total_loss
     metadata['token_entropy'] = entropy_sum / n_response_tokens if n_response_tokens > 0 else 0
     metadata['raw_rewards'] = raw_rewards.mean().item() 

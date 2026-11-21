@@ -1,5 +1,9 @@
+from collections.abc import Callable
+from typing_extensions import Literal
+
 import pytest
 import torch
+from transformers import PreTrainedTokenizerBase
 
 from .adapters import (
     run_aggregate_loss_across_microbatch as aggregate_loss_across_microbatch,
@@ -217,6 +221,29 @@ def _train_step_reward_fn(response: str, ground_truth: str) -> dict[str, float]:
         "answer_reward": reward,
     }
 
+import copy
+def loss_for(gas, model: torch.nn.Module,
+    tokenizer: PreTrainedTokenizerBase,
+    optimizer: torch.optim.Optimizer,
+    gradient_accumulation_steps: int,
+    max_grad_norm: float | None,
+    reward_fn: Callable[[str, str], dict[str, float]],
+    repeated_prompts: list[str],
+    rollout_responses: list[str],
+    repeated_ground_truths: list[str],
+    group_size: int,
+    baseline: Literal["mean", "none"] = "mean",
+    advantage_eps: float = 1e-6,
+    advantage_normalizer: Literal["std", "none", "mean"] = "std",
+    importance_reweighting_method: Literal["none", "noclip", "grpo", "gspo"] = "none",
+    old_log_probs: torch.Tensor | None = None,
+    cliprange: float | None = None,
+    loss_normalization: Literal["sequence", "constant"] = "sequence",
+    normalization_constant: int | None = None,):
+    m = copy.deepcopy(model)
+    opt = torch.optim.SGD(m.parameters(), lr=0.0)
+    loss, md = grpo_train_step(m, tokenizer, opt, gas, None, reward_fn, repeated_prompts, rollout_responses, repeated_ground_truths, group_size)
+    return loss.item(), md
 
 def test_grpo_train_step_standard_on_policy(numpy_snapshot, tiny_train_model, tokenizer):
     prompts, responses, ground_truths, _ = _train_step_inputs(tokenizer)

@@ -155,7 +155,7 @@ def main(args):
     G = args.group_size
     n_prompts = args.rollout_batch_size // G  # 256 // 8 = 32 prompts per step -> 200 steps = 1 epoch
 
-    wandb_run = wandb.init( entity="manoogim-personal", project=args.wandb_project, name=f"{args.run_name}_seed{args.seed}", config=vars(args), mode=args.wandb_mode,)
+    wandb_run = wandb.init( entity="manoogim-personal", project=args.wandb_project, tags=['seed-study'], name=f"{args.run_name}", config=vars(args), mode=args.wandb_mode,)
     
     policy, tokenizer, optimizer, generator = init_models(args)
 
@@ -206,9 +206,13 @@ def main(args):
         logs["time/sync_policy_weights"] = spw_elapsed
         if is_cadence_hit(step, args.log_rollouts_every):
             rows = []
-            for p, r, gt in list(zip(repeated_prompts, responses, repeated_gts))[:16]:
-                rows.append([step, p, r, gt, r1_zero_reward_fn(r, gt)["reward"]])
-            logs["rollouts"] = wandb.Table(columns=["step", "prompt", "response", "ground_truth", "reward"], data=rows)
+            rng = random.Random(args.seed * 100_000 + step)  # local RNG: reproducible, doesn't disturb global state
+            lresp = len(responses)
+            for i in sorted(rng.sample(range(lresp), k=min(16, lresp))):
+                p, r, gt = repeated_prompts[i], responses[i], repeated_gts[i]
+                r1z = r1_zero_reward_fn(r, gt)
+                rows.append([step, p, r, gt, r1z["reward"], r1z["format_reward"]])
+            logs["rollouts"] = wandb.Table(columns=["step", "prompt", "response", "ground_truth", "reward", "format_reward"], data=rows)
 
         wandb_run.log(logs, step=step)
         print(f"step {step}: " + ", ".join(f"{k}={v:.4f}" for k, v in logs.items() if isinstance(v, float)), flush=True)

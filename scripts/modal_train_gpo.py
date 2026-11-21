@@ -14,21 +14,11 @@ def make_cmd(seed: int, steps: int) -> list[str]:
     "--eval-every", "10",
     "--dtype", "bfloat16",
     "--seed", str(seed),
+    "--wandb-project", "cs336-alignment_lr_abla",
+    "--lr", "2e-5"
     ]
     cmd = ["python", "-u", "scripts/train_grpo.py", *default_args]
     return cmd
-
-# DEFAULT_ARGS = [
-#     "--backend", "vllm",
-#     "--device", "cuda:0",
-#     "--model-id", "allenai/OLMo-2-0425-1B",
-#     "--wandb-mode", "online",
-#     "--run-name", f"grpo_{steps}step_seed{seed}",
-#     "--n-steps", str(steps),
-#     "--eval-every", "10",
-#     "--dtype", "bfloat16",
-#     "--seed", str(seed),
-# ]
 
 @app.local_entrypoint()
 def main(*argv: str) -> None:
